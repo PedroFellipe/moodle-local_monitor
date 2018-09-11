@@ -29,6 +29,7 @@ require_once($CFG->libdir . "/externallib.php");
  */
 class local_monitor_external extends \external_api {
     private static $day = 60 * 60 * 24;
+    private static $week = 60 * 60 * 24 * 7;
 
     /**
      * Returns default values for get_online_tutors_parameters
@@ -144,11 +145,15 @@ class local_monitor_external extends \external_api {
         $start = new \DateTime($startdate, \core_date::get_server_timezone_object());
         $end = new \DateTime($enddate, \core_date::get_server_timezone_object());
 
+        $weeks = ($end->getTimestamp()-$start->getTimestamp())/self::$week;
+
         $start = $start->getTimestamp();
+        $end_date = $end->getTimestamp();
         $end = $end->getTimestamp() + self::$day;
 
         $interval = $end - $start;
         $days = $interval / self::$day;
+        $result['total'] = 0;
 
         try {
             $tutorgrupo = $DB->get_record('int_pessoa_user', array('pes_id' => $tutorid));
@@ -161,6 +166,49 @@ class local_monitor_external extends \external_api {
             $name = $tutor->firstname . ' ' . $tutor->lastname;
             $result = array('id' => $tutor->id, 'fullname' => $name, 'items' => array());
 
+            for ($i = 0; $i < $weeks; $i++) {
+
+                $parameters = array(
+                    (integer)$tutor->id,
+                    $end_date - self::$week * ($i + 1),
+                    $end_date - self::$week * $i
+                );
+
+                $query = "SELECT id, timecreated
+                            FROM {logstore_standard_log}
+                            WHERE userid = ?
+                            AND timecreated >= ?
+                            AND timecreated <= ?
+                            ORDER BY timecreated ASC";
+
+                // Get user logs.
+                $logs = $DB->get_records_sql($query, $parameters);
+
+                $date_start = new \DateTime("NOW", \core_date::get_server_timezone_object());
+                $date_start->setTimestamp($end_date - self::$week * ($i + 1));
+                $date_end = new \DateTime("NOW", \core_date::get_server_timezone_object());
+                $date_end->setTimestamp($end_date - self::$week * $i);
+
+                $previouslog = array_shift($logs);
+                $previouslogtime = isset($previouslog) ? $previouslog->timecreated : 0;
+                $sessionstart = isset($previouslog) ? $previouslog->timecreated : 0;
+                $onlinetime = 0;
+
+                foreach ($logs as $log) {
+                    if (($log->timecreated - $previouslogtime) < $timebetweenclicks) {
+                        $onlinetime += $log->timecreated - $previouslogtime;
+                        $sessionstart = $log->timecreated;
+                    }
+
+                    $previouslogtime = $log->timecreated;
+                }
+
+                $formated_time = gmdate("H:i:s", $onlinetime);
+
+                $result['total'] = $result['total'] + $onlinetime;
+                $result['weeks'][] = array('onlinetime' => $formated_time, 'date_start' => $date_start->format("d-m-Y"), 'date_end' => $date_end->format("d-m-Y"));
+            }
+            
             for ($i = $days; $i > 0; $i--) {
 
                 $parameters = array(
@@ -198,7 +246,7 @@ class local_monitor_external extends \external_api {
 
                 $result['items'][] = array('onlinetime' => $onlinetime, 'date' => $date->format("d-m-Y"));
             }
-
+            $result['total'] = gmdate("H:i:s", $result['total']);
             return $result;
         } catch (\Exception $exception) {
             if ($CFG->debug == DEBUG_DEVELOPER) {
@@ -222,12 +270,20 @@ class local_monitor_external extends \external_api {
         return new \external_function_parameters(array(
                 'id' => new \external_value(PARAM_INT, get_string('returnid', 'local_monitor')),
                 'fullname' => new \external_value(PARAM_TEXT, get_string('returnfullname', 'local_monitor')),
+                'total' => new \external_value(PARAM_TEXT, get_string('returntotal', 'local_monitor')),
                 'items' => new \external_multiple_structure(
                     new \external_single_structure(array(
                             'onlinetime' => new \external_value(PARAM_TEXT, get_string('returnonlinetime', 'local_monitor')),
                             'date' => new \external_value(PARAM_TEXT, get_string('returndate', 'local_monitor'))
-                        )
-                    ))
+                    )
+                )),
+                'weeks' => new \external_multiple_structure(
+                    new \external_single_structure(array(
+                            'onlinetime' => new \external_value(PARAM_TEXT, get_string('returnonlinetime', 'local_monitor')),
+                            'date_start' => new \external_value(PARAM_TEXT, get_string('returndate_start', 'local_monitor')),
+                            'date_end' => new \external_value(PARAM_TEXT, get_string('returndate_end', 'local_monitor'))
+                    )
+                ))
             )
         );
     }
