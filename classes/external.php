@@ -208,7 +208,7 @@ class local_monitor_external extends \external_api {
                 $result['total'] = $result['total'] + $onlinetime;
                 $result['weeks'][] = array('onlinetime' => $formated_time, 'date_start' => $date_start->format("d-m-Y"), 'date_end' => $date_end->format("d-m-Y"));
             }
-            
+
             for ($i = $days; $i > 0; $i--) {
 
                 $parameters = array(
@@ -389,7 +389,7 @@ class local_monitor_external extends \external_api {
 
             $returndata['itens'][] = array(
                 'groupid' => $discussion->groupid,
-                'grupname' => $discussion->groupname,
+                'groupname' => $discussion->groupname,
                 'discussion' => $discussion->name,
                 'studentsposts' => $data['everyoneelseposts'],
                 'tutorposts' => $data['userposts'],
@@ -423,7 +423,7 @@ class local_monitor_external extends \external_api {
                                 PARAM_TEXT,
                                 get_string('paramgroupid', 'local_monitor')
                             ),
-                            'grupname' => new \external_value(
+                            'groupname' => new \external_value(
                                 PARAM_TEXT,
                                 get_string('groupname', 'local_monitor')
                             ),
